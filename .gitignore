@@ -1,0 +1,32 @@
+# Build artifacts
+*.o
+*.so
+*.a
+*.ko
+
+# Generated files
+*.skel.h
+vmlinux.h
+
+# Binaries
+main
+
+# Object files and dependencies
+*.d
+.*.cmd
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build directories
+build/
+dist/
+
+# Temporary files
+*.tmp
+*.log
