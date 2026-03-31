@@ -36,6 +36,11 @@ Tunable thresholds in `main.c`:
 - `HUMAN_MIN_MS` — Minimum interval for human typing (default: 30ms)
 - `ALERT_THRESHOLD` — Consecutive suspicious events before blocking (default: 3)
 
+## Testing 
+
+ESP32-S2 was used for BLE keystroke transmission. Next, test with hardware like rubber ducky or ESP32-S3, targetting usb ports
+
+
 ## License
 
 GPL v2
