@@ -1,18 +1,74 @@
-# eBPF-HID
+# eBPF-hid_guard
 
-A Linux kernel-space security monitor for detecting and blocking malicious HID (Human Interface Device) attacks in real-time using eBPF.
+A Linux kernel-space security monitor for detecting and blocking HID injection attacks (Rubber Ducky, O.MG Cable, ESP32-based keyboard emulators) using eBPF HID-BPF struct_ops.
 
-## Overview
+## What This Does
 
-This project detects rapid keystroke patterns characteristic of automated attacks (Rubber Ducky, BadUSB, compromised Bluetooth devices) and blocks the offending device by unbinding it from the kernel HID driver. It tracks both USB and Bluetooth peripherals, ignoring pre-existing devices to focus only on newly connected threats.
+Malicious HID devices emulate keyboards and inject keystrokes far faster than any human typist. This tool detects that timing anomaly and unbinds the offending device from the kernel HID driver before the attack completes.
+
+On startup, the tool snapshots all currently connected HID devices and ignores them — only newly connected devices are monitored. It supports both USB and Bluetooth HID devices.
+
+## Branch Structure
+
+### `main` — Working Proof of Concept
+
+Functional end-to-end pipeline, tested against an ESP32-based keyboard emulator:
+
+- Snapshots pre-existing devices at startup; ignores them
+- Parallel USB and BLE discovery threads — first to detect a new device wins
+- Attaches a HID-BPF `struct_ops` program to the discovered device
+- BPF side captures raw HID report bytes, timestamp, vendor/product/bus via ring buffer
+- Userspace computes inter-keystroke deltas, tracks a suspicion counter, and unbinds the device via sysfs when the threshold is crossed
+
+**Known limitations that triggered the rewrite:**
+
+- Report size hardcoded to 8 or 9 bytes (standard boot-protocol keyboards only) — breaks on non-standard descriptors
+- No HID report descriptor parsing — device type is assumed, not verified; will misfire on mice, touchpads, or composite devices
+- Detection logic lives entirely in userspace — BPF is used only as a raw data pipe
+- `hid_id` derived from the sysfs minor number, which is not stable across reboots
+
+### `v0.1` — Clean Rewrite (Active Development)
+
+Portable foundation being built before re-wiring the BPF layer:
+
+- Enumerates all HID devices via `/sys/bus/hid/devices/`
+- Reads and hex-dumps raw report descriptors from sysfs
+- HID report descriptor parser in progress (`hid_desc_parse.c`) — will identify device type before attaching
+- Memory-clean (verified with AddressSanitizer)
+
+## Intended Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    Userspace                         │
+│                                                      │
+│  udev monitor → descriptor parse → keyboard?         │
+│       ↓                                              │
+│  populate BPF config maps (thresholds, device info)  │
+│       ↓                                              │
+│  attach HID-BPF struct_ops to hid_id                 │
+│       ↓                                              │
+│  ring buffer consumer → sysfs unbind on attack       │
+└──────────────────────────┬──────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────┐
+│                  BPF (kernel side)                   │
+│                                                      │
+│  hid_device_event → timing math (Welford's online    │
+│  variance, fixed-point) → per-key timestamp maps     │
+│  → ring buffer submit on anomaly                     │
+└─────────────────────────────────────────────────────┘
+```
+
+Detection logic moves into BPF. Userspace handles descriptor parsing, config map population, and the unbind response. The enumeration window between device connection and BPF attachment is a documented, bounded limitation — real-world HID injection tools include deliberate post-enumeration delays that this window falls within.
 
 ## Requirements
 
-- Linux kernel ≥ 5.15 (with HID-BPF support enabled)
-- `libelf-dev` and `libz-dev`
-- LLVM/Clang (for eBPF compilation)
-- libbpf development headers
-- Root privileges to run
+- Linux kernel ≥ 6.3 (HID-BPF struct_ops stable)
+- `libbpf` development headers
+- LLVM/Clang (for BPF compilation)
+- `libelf` and `zlib` development headers
+- Root privileges
 
 ## Build
 
@@ -23,18 +79,35 @@ make
 ## Usage
 
 ```bash
-sudo ./main [hid_id]
+# Auto-detect: plug in or pair the device when prompted
+sudo ./hid_guard
+
+# Manual override with known hid_id
+sudo ./hid_guard <hid_id>
+
+# List available HID devices
+ls /sys/bus/hid/devices/
 ```
 
-- **Auto-detection**: Prompts for USB or Bluetooth device connection
-- **Manual override**: Supply `hid_id` directly (e.g., `sudo ./main 5`)
+## Detection Tunables (`main.c`)
 
-## Configuration
+| Parameter | Default | Meaning |
+|---|---|---|
+| `ATTACK_MAX_MS` | 5 ms | Inter-keystroke interval indicating injection |
+| `HUMAN_MIN_MS` | 30 ms | Minimum interval for human typing |
+| `ALERT_THRESHOLD` | 3 | Consecutive suspicious events before blocking |
 
-Tunable thresholds in `main.c`:
-- `ATTACK_MAX_MS` — Keystroke interval indicating attack (default: 5ms)
-- `HUMAN_MIN_MS` — Minimum interval for human typing (default: 30ms)
-- `ALERT_THRESHOLD` — Consecutive suspicious events before blocking (default: 3)
+## Status
+
+| Component | State |
+|---|---|
+| Device enumeration | Done |
+| Report descriptor read | Done |
+| Descriptor parser (keyboard identification) | In progress |
+| BPF config map population | Planned |
+| HID-BPF struct_ops attachment | Done (main branch) |
+| Timing detection (Welford variance, BPF-side) | Planned |
+| Sysfs unbind blocking | Done (main branch) |
 
 ## License
 
