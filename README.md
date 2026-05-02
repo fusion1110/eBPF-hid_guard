@@ -1,40 +1,45 @@
-# eBPF-HID
+# eBPF-hid_guard — v0.1 (rewrite in progress)
 
-A Linux kernel-space security monitor for detecting and blocking malicious HID (Human Interface Device) attacks in real-time using eBPF.
+This branch is a clean rewrite of the `main` branch PoC. The goal is a portable, architecture-correct foundation before re-wiring the BPF layer.
 
-## Overview
+## Current State
 
-This project detects rapid keystroke patterns characteristic of automated attacks (Rubber Ducky, BadUSB, compromised Bluetooth devices) and blocks the offending device by unbinding it from the kernel HID driver. It tracks both USB and Bluetooth peripherals, ignoring pre-existing devices to focus only on newly connected threats.
+- Enumerates all connected HID devices via `/sys/bus/hid/devices/`
+- Reads and hex-dumps raw report descriptors from sysfs
+- HID report descriptor parser in progress — will identify device type before attaching any BPF program
 
-## Requirements
+BPF attachment, timing detection, and blocking are not present on this branch. See `main` for the working PoC.
 
-- Linux kernel ≥ 5.15 (with HID-BPF support enabled)
-- `libelf-dev` and `libz-dev`
-- LLVM/Clang (for eBPF compilation)
-- libbpf development headers
-- Root privileges to run
+## Status
+
+| Component | State |
+|---|---|
+| Device enumeration | Done |
+| Report descriptor read | Done |
+| Descriptor parser (keyboard identification) | In progress |
+| BPF config map population | Planned |
+| HID-BPF struct_ops attachment | Planned |
+| Timing detection (Welford variance, BPF-side) | Planned |
+| Sysfs unbind blocking | Planned |
 
 ## Build
 
 ```bash
-make
+gcc -o hid_guard hid_guard.c
 ```
 
 ## Usage
 
 ```bash
-sudo ./main [hid_id]
+sudo ./hid_guard
 ```
 
-- **Auto-detection**: Prompts for USB or Bluetooth device connection
-- **Manual override**: Supply `hid_id` directly (e.g., `sudo ./main 5`)
+Prints report descriptors for all currently connected HID devices.
 
-## Configuration
+## Requirements
 
-Tunable thresholds in `main.c`:
-- `ATTACK_MAX_MS` — Keystroke interval indicating attack (default: 5ms)
-- `HUMAN_MIN_MS` — Minimum interval for human typing (default: 30ms)
-- `ALERT_THRESHOLD` — Consecutive suspicious events before blocking (default: 3)
+- Linux with sysfs HID support (`/sys/bus/hid/devices/`)
+- Root privileges (for reading report descriptors)
 
 ## License
 
