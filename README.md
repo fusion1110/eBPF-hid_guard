@@ -109,6 +109,11 @@ ls /sys/bus/hid/devices/
 | Timing detection (Welford variance, BPF-side) | Planned |
 | Sysfs unbind blocking | Done (main branch) |
 
+## Testing 
+
+ESP32-S2 was used for BLE keystroke transmission. Next, test with hardware like rubber ducky or ESP32-S3, targetting usb ports
+
+
 ## License
 
 GPL v2
