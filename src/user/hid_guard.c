@@ -17,25 +17,29 @@
 #include <dirent.h>
 #include <sys/types.h>
 
+#include "hid_guard.h"
 #define _PATH "/sys/bus/hid/devices/"
 
-static volatile bool running = true;
 
-static void int_exit(int sig) {
-  running = false;
-  exit(0);
-}
+/* Status
+ * devices list *DONE*
+ * reading of the report_descriptions *DONE*
+ * Parsing of the report descriptor to identify the keyboard -> LEFT
+ * pass the struct to bpf map
+ * ebpf hook to that device
+ * monitoring -> detection(delta keystrokes, delta connection time & first packet recieved, wellfords algo)
+*/
+
+
+void file_reading(char *path);
+char **get_hid_devices(void);
+void get_hid_id(void);
+
 
 static void usage(const char *prog) {
   fprintf(stderr, "Usage: %s <sysfs_path>\n", prog);
   fprintf(stderr, "Example: %s /sys/bus/hid/devices/\n", prog);
 }
-
-/*
- * 1. list the devices in sys/bus/hid/-------devices---------
- * 2. print the report_des of all the devices.
- * */
-
 char **get_hid_devices(void) {
   DIR *folder;
   struct dirent *entry;
@@ -82,38 +86,63 @@ char **get_hid_devices(void) {
   return (char **)dev_list;
 }
 
-/*TODO: modify this to get the hid_id from the dev_list*/
-/*
-static int get_hid_id(const char *path) {
-  const char *dir;
-  char uevent[1024];
-  int fd;
+/*TODO: modify this to get the hid_id from the dev_list
+ * read the list from get_hid_devices
+ * *DONE*
+ */
 
-  memset(uevent, 0, sizeof(uevent));
-  snprintf(uevent, sizeof(uevent) - 1, "%s/uevent", path);
+void get_hid_id(void) {
+  char **list = get_hid_devices();
+  char **head = list;
 
-  fd = open(uevent, O_RDONLY | O_NONBLOCK);
-  if (fd < 0)
-    return -ENOENT;
+   while (*list != NULL) {
+   size_t path_size =
+      strlen(*list) + strlen("/report_descriptor") + 1; // +1 for null sentinal
 
-  close(fd);
+  char *report_descriptor_path;
+    report_descriptor_path = malloc(path_size);
+    snprintf(report_descriptor_path, path_size, "%s%s", *list,
+             "/report_descriptor");
+    printf("report_descriptor_path: %s \n", report_descriptor_path);
 
-  return (int)strtol(str_id, NULL, 16);
+    file_reading(report_descriptor_path);
+
+    free(*list);
+    free(report_descriptor_path);
+    list++;
+  }
+
+  free(head);
 }
-*/
+
+void file_reading(char *path) {
+  unsigned char data[1024];
+
+  FILE *fptr;
+  fptr = fopen(path, "rb");
+
+  if (fptr == NULL) {
+    perror("Error opening file");
+    return;
+  }
+  size_t report_bytes = fread(data, 1 /*a single byte*/, sizeof(data), fptr);
+
+  printf("Read %zu bytes from descriptor:\n", report_bytes);
+
+  for (size_t i = 0; i < report_bytes; i++) {
+    printf("%02x ", data[i]);
+
+    if ((i + 1) % 16 == 0)
+      printf("\n");
+  }
+  printf("\n");
+
+  fclose(fptr);
+}
 
 int main() {
+  printf("Report Descriptor paths \n");
+  get_hid_id();
 
-  char **res = get_hid_devices();
-  char **head = res;
-  while (*res != NULL) {
-    printf("%s \n", *res);
-    free(*res);
-    res++;
-  }
-  goto cleanup;
-
-cleanup:
-  free(head);
   return 0;
 }
