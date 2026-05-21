@@ -20,26 +20,16 @@
 #include "hid_guard.h"
 #define _PATH "/sys/bus/hid/devices/"
 
-
 /* Status
  * devices list *DONE*
  * reading of the report_descriptions *DONE*
  * Parsing of the report descriptor to identify the keyboard -> LEFT
  * pass the struct to bpf map
  * ebpf hook to that device
- * monitoring -> detection(delta keystrokes, delta connection time & first packet recieved, wellfords algo)
-*/
+ * monitoring -> detection(delta keystrokes, delta connection time & first
+ * packet recieved, wellfords algo)
+ */
 
-
-void file_reading(char *path);
-char **get_hid_devices(void);
-void get_hid_id(void);
-
-
-static void usage(const char *prog) {
-  fprintf(stderr, "Usage: %s <sysfs_path>\n", prog);
-  fprintf(stderr, "Example: %s /sys/bus/hid/devices/\n", prog);
-}
 char **get_hid_devices(void) {
   DIR *folder;
   struct dirent *entry;
@@ -94,19 +84,22 @@ char **get_hid_devices(void) {
 void get_hid_id(void) {
   char **list = get_hid_devices();
   char **head = list;
+  size_t out_size;
 
-   while (*list != NULL) {
-   size_t path_size =
-      strlen(*list) + strlen("/report_descriptor") + 1; // +1 for null sentinal
+  while (*list != NULL) {
+    size_t path_size = strlen(*list) + strlen("/report_descriptor") +
+                       1; // +1 for null sentinal
 
-  char *report_descriptor_path;
+    char *report_descriptor_path;
     report_descriptor_path = malloc(path_size);
     snprintf(report_descriptor_path, path_size, "%s%s", *list,
              "/report_descriptor");
     printf("report_descriptor_path: %s \n", report_descriptor_path);
 
-    file_reading(report_descriptor_path);
+    unsigned char *buffer = file_reading(report_descriptor_path, &out_size);
+    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
 
+    free(buffer);
     free(*list);
     free(report_descriptor_path);
     list++;
@@ -115,17 +108,19 @@ void get_hid_id(void) {
   free(head);
 }
 
-void file_reading(char *path) {
-  unsigned char data[1024];
+unsigned char *file_reading(char *path, size_t *out_size) {
+  unsigned char *data = malloc(1024);
 
   FILE *fptr;
   fptr = fopen(path, "rb");
 
   if (fptr == NULL) {
     perror("Error opening file");
-    return;
+    return NULL;
   }
-  size_t report_bytes = fread(data, 1 /*a single byte*/, sizeof(data), fptr);
+  size_t report_bytes = fread(data, 1 /*a single byte*/, 1024, fptr);
+
+  *out_size = report_bytes;
 
   printf("Read %zu bytes from descriptor:\n", report_bytes);
 
@@ -138,6 +133,8 @@ void file_reading(char *path) {
   printf("\n");
 
   fclose(fptr);
+
+  return data;
 }
 
 int main() {
