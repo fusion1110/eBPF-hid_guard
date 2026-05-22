@@ -96,8 +96,9 @@ void get_hid_id(void) {
              "/report_descriptor");
     printf("report_descriptor_path: %s \n", report_descriptor_path);
 
-    unsigned char *buffer = file_reading(report_descriptor_path, &out_size);
-    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
+    unsigned char *buffer =
+        file_reading(report_descriptor_path, &out_size, "rb", &report_descriptor_output);
+    //    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
 
     free(buffer);
     free(*list);
@@ -107,12 +108,15 @@ void get_hid_id(void) {
 
   free(head);
 }
-
-unsigned char *file_reading(char *path, size_t *out_size) {
+/*Modify the function to use malloc and realloc
+ * Error handling
+ */
+unsigned char *file_reading(char *path, size_t *out_size,
+                            const char *file_mode, struct hid_output *ops) {
   unsigned char *data = malloc(1024);
 
   FILE *fptr;
-  fptr = fopen(path, "rb");
+  fptr = fopen(path, file_mode);
 
   if (fptr == NULL) {
     perror("Error opening file");
@@ -124,16 +128,9 @@ unsigned char *file_reading(char *path, size_t *out_size) {
 
   printf("Read %zu bytes from descriptor:\n", report_bytes);
 
-  for (size_t i = 0; i < report_bytes; i++) {
-    printf("%02x ", data[i]);
-
-    if ((i + 1) % 16 == 0)
-      printf("\n");
-  }
-  printf("\n");
+  ops->print_data(data, report_bytes);
 
   fclose(fptr);
-
   return data;
 }
 
@@ -141,5 +138,12 @@ int main() {
   printf("Report Descriptor paths \n");
   get_hid_id();
 
+  hid_uevent_parse();
+
   return 0;
 }
+
+/*refactor the code to dynamically decide how to print/view the descriptor data
+ * (raw bytes) and uevent data (ascii) reference code from include/linux/fs.h
+ * and hid.h -> linux kernel
+ * */

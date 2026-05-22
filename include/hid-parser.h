@@ -11,4 +11,10 @@ struct kbd_config {
   uint8_t key_array_count;
 };
 
+struct kbd_map {
+  uint8_t bus;
+  uint32_t vendor;
+  uint32_t product;
+};
+
 #endif
