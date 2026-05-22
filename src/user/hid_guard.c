@@ -114,6 +114,8 @@ void get_hid_id(void) {
 unsigned char *file_reading(char *path, size_t *out_size, const char *file_mode,
                             struct hid_output *ops) {
   unsigned char *data = malloc(1024);
+  if (data == NULL)
+    return NULL;
 
   FILE *fptr;
   fptr = fopen(path, file_mode);
@@ -138,12 +140,12 @@ int main() {
   printf("Report Descriptor paths \n");
   get_hid_id();
 
-  hid_uevent_parse();
+  struct kbd_map *km = hid_uevent_parse();
+  if (km == NULL) {
+    printf("no keyboard found\n");
+    return 1;
+  }
+  free(km);
 
   return 0;
 }
-
-/*refactor the code to dynamically decide how to print/view the descriptor data
- * (raw bytes) and uevent data (ascii) reference code from include/linux/fs.h
- * and hid.h -> linux kernel
- * */
