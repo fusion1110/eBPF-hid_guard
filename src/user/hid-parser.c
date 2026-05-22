@@ -9,28 +9,23 @@ struct hid_output {
   void (*print_data)(unsigned char *buffer, size_t length);
 };
 
-void hid_output_ascii(unsigned char *buffer, size_t length){
+void hid_output_ascii(unsigned char *buffer, size_t length) {
   for (size_t i = 0; i < length; i++) {
     printf("%c", buffer[i]);
   }
   printf("\n");
 }
 
-void hid_output_raw(unsigned char *buffer, size_t length){
-for (size_t i = 0; i < length; i++) {
+void hid_output_raw(unsigned char *buffer, size_t length) {
+  for (size_t i = 0; i < length; i++) {
     printf("%02x", buffer[i]);
   }
   printf("\n");
 }
 
-struct hid_output report_descriptor_output = {
-  .print_data = hid_output_raw
-};
+struct hid_output report_descriptor_output = {.print_data = hid_output_raw};
 
-
-struct hid_output uevent_output = {
-  .print_data = hid_output_ascii
-};
+struct hid_output uevent_output = {.print_data = hid_output_ascii};
 
 /*
 struct kbd_config *hid_desc_parse(unsigned char *buffer, size_t size,

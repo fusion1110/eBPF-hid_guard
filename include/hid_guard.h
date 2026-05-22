@@ -8,12 +8,11 @@ struct hid_output {
   void (*print_data)(unsigned char *buffer, size_t length);
 };
 
-
 extern struct hid_output report_descriptor_output;
 extern struct hid_output uevent_output;
 
-unsigned char *file_reading(char *path, size_t *out_size,
-                            const char *file_mode, struct hid_output *ops);
+unsigned char *file_reading(char *path, size_t *out_size, const char *file_mode,
+                            struct hid_output *ops);
 void get_hid_id(void);
 char **get_hid_devices(void);
 

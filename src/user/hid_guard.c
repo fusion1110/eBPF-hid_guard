@@ -96,8 +96,8 @@ void get_hid_id(void) {
              "/report_descriptor");
     printf("report_descriptor_path: %s \n", report_descriptor_path);
 
-    unsigned char *buffer =
-        file_reading(report_descriptor_path, &out_size, "rb", &report_descriptor_output);
+    unsigned char *buffer = file_reading(report_descriptor_path, &out_size,
+                                         "rb", &report_descriptor_output);
     //    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
 
     free(buffer);
@@ -111,8 +111,8 @@ void get_hid_id(void) {
 /*Modify the function to use malloc and realloc
  * Error handling
  */
-unsigned char *file_reading(char *path, size_t *out_size,
-                            const char *file_mode, struct hid_output *ops) {
+unsigned char *file_reading(char *path, size_t *out_size, const char *file_mode,
+                            struct hid_output *ops) {
   unsigned char *data = malloc(1024);
 
   FILE *fptr;

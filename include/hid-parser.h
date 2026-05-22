@@ -1,6 +1,7 @@
 #ifndef _HID_PARSER_H
 #define _HID_PARSER_H
 
+#include "hid_guard.h"
 #include <stdint.h>
 
 struct kbd_config {
