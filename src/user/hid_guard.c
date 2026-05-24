@@ -29,6 +29,22 @@
  * monitoring -> detection(delta keystrokes, delta connection time & first
  * packet recieved, wellfords algo)
  */
+void hid_output_ascii(unsigned char *buffer, size_t length) {
+  for (size_t i = 0; i < length; i++) {
+    printf("%c", buffer[i]);
+  }
+  printf("\n");
+}
+
+void hid_output_raw(unsigned char *buffer, size_t length) {
+  for (size_t i = 0; i < length; i++) {
+    printf("%02x", buffer[i]);
+  }
+  printf("\n");
+}
+
+struct hid_output report_descriptor_output = {.print_data = hid_output_raw};
+struct hid_output uevent_output = {.print_data = hid_output_ascii};
 
 char **get_hid_devices(void) {
   DIR *folder;
@@ -76,43 +92,35 @@ char **get_hid_devices(void) {
   return (char **)dev_list;
 }
 
-/*TODO: modify this to get the hid_id from the dev_list
- * read the list from get_hid_devices
- * *DONE*
- */
-
-void get_hid_id(void) {
-  char **list = get_hid_devices();
-  char **head = list;
+/*Change how this works
+ * Required: To return the report descriptor bytes when given a path -> a device
+ * only*/
+unsigned char *report_descriptor_raw(char *path) {
   size_t out_size;
 
-  while (*list != NULL) {
-    size_t path_size = strlen(*list) + strlen("/report_descriptor") +
-                       1; // +1 for null sentinal
+  size_t path_size =
+      strlen(path) + strlen("/report_descriptor") + 1; // +1 for null sentinal
 
-    char *report_descriptor_path;
-    report_descriptor_path = malloc(path_size);
-    snprintf(report_descriptor_path, path_size, "%s%s", *list,
-             "/report_descriptor");
-    printf("report_descriptor_path: %s \n", report_descriptor_path);
+  char *report_descriptor_path;
+  report_descriptor_path = malloc(path_size);
+  snprintf(report_descriptor_path, path_size, "%s%s", path,
+           "/report_descriptor");
+  printf("report_descriptor_path: %s \n", report_descriptor_path);
 
-    unsigned char *buffer = file_reading(report_descriptor_path, &out_size,
-                                         "rb", &report_descriptor_output);
-    //    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
+  unsigned char *report_buffer = read_hid_file(
+      report_descriptor_path, &out_size, "rb", &report_descriptor_output);
+  //    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
 
-    free(buffer);
-    free(*list);
-    free(report_descriptor_path);
-    list++;
-  }
+  free(report_descriptor_path);
 
-  free(head);
+  return report_buffer;
 }
+
 /*Modify the function to use malloc and realloc
  * Error handling
  */
-unsigned char *file_reading(char *path, size_t *out_size, const char *file_mode,
-                            struct hid_output *ops) {
+unsigned char *read_hid_file(char *path, size_t *out_size,
+                             const char *file_mode, struct hid_output *ops) {
   unsigned char *data = malloc(1024);
   if (data == NULL)
     return NULL;
@@ -137,15 +145,14 @@ unsigned char *file_reading(char *path, size_t *out_size, const char *file_mode,
 }
 
 int main() {
-  printf("Report Descriptor paths \n");
-  get_hid_id();
-
-  struct kbd_map *km = hid_uevent_parse();
+  char **dev_list = get_hid_devices();
+  struct kbd_map *km = parse_hid_uevent(dev_list);
   if (km == NULL) {
     printf("no keyboard found\n");
     return 1;
   }
   free(km);
+  free(dev_list);
 
   return 0;
 }
