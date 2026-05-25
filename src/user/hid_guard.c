@@ -20,15 +20,6 @@
 #include "hid_guard.h"
 #define _PATH "/sys/bus/hid/devices/"
 
-/* Status
- * devices list *DONE*
- * reading of the report_descriptions *DONE*
- * Parsing of the report descriptor to identify the keyboard -> LEFT
- * pass the struct to bpf map
- * ebpf hook to that device
- * monitoring -> detection(delta keystrokes, delta connection time & first
- * packet recieved, wellfords algo)
- */
 void hid_output_ascii(unsigned char *buffer, size_t length) {
   for (size_t i = 0; i < length; i++) {
     printf("%c", buffer[i]);
@@ -95,9 +86,7 @@ char **get_hid_devices(void) {
 /*Change how this works
  * Required: To return the report descriptor bytes when given a path -> a device
  * only*/
-unsigned char *report_descriptor_raw(char *path) {
-  size_t out_size;
-
+unsigned char *report_descriptor_raw(char *path, size_t *out_size) {
   size_t path_size =
       strlen(path) + strlen("/report_descriptor") + 1; // +1 for null sentinal
 
@@ -107,18 +96,14 @@ unsigned char *report_descriptor_raw(char *path) {
            "/report_descriptor");
   printf("report_descriptor_path: %s \n", report_descriptor_path);
 
-  unsigned char *report_buffer = read_hid_file(
-      report_descriptor_path, &out_size, "rb", &report_descriptor_output);
-  //    struct kbd_config *config = hid_desc_parse(buffer, out_size, hid_id);
+  unsigned char *report_buffer = read_hid_file(report_descriptor_path, out_size,
+                                               "rb", &report_descriptor_output);
 
   free(report_descriptor_path);
 
   return report_buffer;
 }
 
-/*Modify the function to use malloc and realloc
- * Error handling
- */
 unsigned char *read_hid_file(char *path, size_t *out_size,
                              const char *file_mode, struct hid_output *ops) {
   unsigned char *data = malloc(1024);
@@ -145,7 +130,9 @@ unsigned char *read_hid_file(char *path, size_t *out_size,
 }
 
 int main() {
+  size_t out_size;
   char **dev_list = get_hid_devices();
+  unsigned char *data = report_descriptor_raw(dev_list[0], &out_size);
   struct kbd_map *km = parse_hid_uevent(dev_list);
   if (km == NULL) {
     printf("no keyboard found\n");
@@ -153,6 +140,7 @@ int main() {
   }
   free(km);
   free(dev_list);
+  free(data);
 
   return 0;
 }
