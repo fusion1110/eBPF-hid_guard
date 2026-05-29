@@ -4,6 +4,8 @@
 
 #include "hid_guard.h"
 
+#define BIT(nr) (1 << (nr))
+
 uint16_t get_unaligned_le16(const uint8_t *buf) {
   return buf[0] | (buf[1] << 8);
 }
@@ -12,6 +14,7 @@ uint32_t get_unaligned_le32(const uint8_t *buf) {
   return buf[0] | (buf[1] << 8) | (buf[2] << 16) | ((uint32_t)buf[3] << 24);
 }
 
+/*Copied from hid-core.c from linux kernel source*/
 static const uint8_t *fetch_item(const uint8_t *start, const uint8_t *end,
                                  struct hid_item *item) {
   uint8_t b;
@@ -24,7 +27,7 @@ static const uint8_t *fetch_item(const uint8_t *start, const uint8_t *end,
   item->type = (b >> 2) & 3;
   item->tag = (b >> 4) & 15;
 
-  // i may have no use for this -> as my purpose is to just identify the whether
+  // i have no use for this -> as my purpose is to just identify the whether
   // the dev is a keyboard or not
   if (item->tag == HID_ITEM_TAG_LONG) {
 
@@ -45,7 +48,7 @@ static const uint8_t *fetch_item(const uint8_t *start, const uint8_t *end,
   }
 
   item->format = HID_ITEM_FORMAT_SHORT;
-  // item->size = BIT(b & 3) >> 1; /* 0, 1, 2, 3 -> 0, 1, 2, 4 */
+  item->size = BIT(b & 3) >> 1; /* 0, 1, 2, 3 -> 0, 1, 2, 4 */
 
   if (end - start < item->size)
     return NULL;
@@ -98,23 +101,78 @@ struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len) {
   unsigned int report_size = 0;
   unsigned int report_count = 0;
   unsigned int bit_offset = 0;
+  unsigned int key_array_offset = 0;
+  unsigned int key_array_count = 0;
   int input_count = 0;
 
   while ((start = fetch_item(start, end, &item)) != NULL) {
+    // GLOBAL(1), LOCAL(2), MAIN(0).
     switch (item.type) {
     case HID_ITEM_TYPE_GLOBAL:
-      // handle usage_page, report_id, report_size, report_count
+      switch (item.tag) {
+      case HID_GLOBAL_ITEM_TAG_USAGE_PAGE:
+        usage_page = item_udata(&item);
+        break;
+      case HID_GLOBAL_ITEM_TAG_REPORT_ID:
+        current_report_id = item_udata(&item);
+        break;
+      case HID_GLOBAL_ITEM_TAG_REPORT_SIZE:
+        report_size = item_udata(&item);
+        break;
+      case HID_GLOBAL_ITEM_TAG_REPORT_COUNT:
+        report_count = item_udata(&item);
+        break;
+      }
       break;
     case HID_ITEM_TYPE_LOCAL:
-      // handle usage
+      usage = item_udata(&item);
       break;
     case HID_ITEM_TYPE_MAIN:
-      // handle BEGIN_COLLECTION, END_COLLECTION, INPUT
-      // reset usage after each main item
-      usage = 0;
-      break;
+      switch (item.tag) {
+      case HID_MAIN_ITEM_TAG_BEGIN_COLLECTION:
+        /*HID spec section 6.2.2.8:
+         *"when the parser encounters a main item it concatenates the last
+         declared Usage Page with a Usage to form a complete usage value."*/
+        {
+          unsigned int full_usage;
+          full_usage = (usage_page << 16) | usage;
+          if (full_usage == HID_GD_KEYBOARD) {
+            in_keyboard = 1;
+          }
+          break;
+        }
+      case HID_MAIN_ITEM_TAG_INPUT:
+        if (in_keyboard) {
+          bit_offset += report_size * report_count;
+          /*second item ie, the keycode array*/
+          if (input_count == 1) {
+            struct kbd_config *kc = malloc(sizeof(struct kbd_config));
+            /*USB HID Class Specification 1.11
+             * "If a device has multiple reports, each report is preceded by a
+             * single byte report ID field. The report ID is not described in
+             * the report descriptor."
+             * so need to add +1 to key_array_offset*/
+            key_array_offset = (bit_offset / 8) + 1;
+            key_array_count = report_count;
+            kc->report_id = current_report_id;
+            kc->key_array_offset = key_array_offset;
+            kc->key_array_count = key_array_count;
+            return kc;
+          }
+          input_count++;
+        }
+        usage = 0;
+        break;
+      case HID_MAIN_ITEM_TAG_END_COLLECTION:
+        in_keyboard = 0;
+        bit_offset = 0;
+        input_count = 0;
+        usage = 0;
+        break;
+      }
     }
   }
+
   return NULL;
 }
 

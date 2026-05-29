@@ -132,14 +132,24 @@ unsigned char *read_hid_file(char *path, size_t *out_size,
 int main() {
   size_t out_size;
   char **dev_list = get_hid_devices();
+  /*TODO: need to loop through devices here.*/
   unsigned char *data = report_descriptor_raw(dev_list[0], &out_size);
   struct kbd_map *km = parse_hid_uevent(dev_list);
   if (km == NULL) {
     printf("no keyboard found\n");
-    return 1;
+    goto cleanup;
   }
+
+  struct kbd_config *hdp = hid_desc_parse(data, out_size);
+  if (hdp == NULL) {
+    printf("Failed to parse the data \n");
+    goto cleanup;
+  }
+
+cleanup:
   free(km);
   free(dev_list);
+  free(hdp);
   free(data);
 
   return 0;
