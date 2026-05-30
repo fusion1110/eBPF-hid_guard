@@ -68,9 +68,11 @@ char **get_hid_devices(void) {
 
     /*Re-allocation of memory -> new device so more mem required + 1 for NULL*/
     char **temp = realloc(dev_list, (number_of_devices + 2) * sizeof(char *));
-    if (temp == NULL)
+    if (temp == NULL) {
+      free(dev_path);
+      free(temp);
       return NULL;
-
+    }
     dev_list = temp;
 
     dev_list[number_of_devices] = dev_path;
@@ -79,13 +81,9 @@ char **get_hid_devices(void) {
   }
   dev_list[number_of_devices] = NULL;
   closedir(folder);
-
   return (char **)dev_list;
 }
 
-/*Change how this works
- * Required: To return the report descriptor bytes when given a path -> a device
- * only*/
 unsigned char *report_descriptor_raw(char *path, size_t *out_size) {
   size_t path_size =
       strlen(path) + strlen("/report_descriptor") + 1; // +1 for null sentinal
@@ -100,7 +98,6 @@ unsigned char *report_descriptor_raw(char *path, size_t *out_size) {
                                                "rb", &report_descriptor_output);
 
   free(report_descriptor_path);
-
   return report_buffer;
 }
 
@@ -132,25 +129,33 @@ unsigned char *read_hid_file(char *path, size_t *out_size,
 int main() {
   size_t out_size;
   char **dev_list = get_hid_devices();
-  /*TODO: need to loop through devices here.*/
-  unsigned char *data = report_descriptor_raw(dev_list[0], &out_size);
-  struct kbd_map *km = parse_hid_uevent(dev_list);
+  unsigned char *data = report_descriptor_raw(*dev_list, &out_size);
+  struct kbd_map *km = hid_uevent_parse(dev_list);
   if (km == NULL) {
     printf("no keyboard found\n");
     goto cleanup;
   }
 
+  /*TODO: link the hid_desc_parse and hid_uevent_parse
+   *desired OUTPUT: on detecting a keyboard in hid_desc_parse 
+    the uevent parses the hid_id which is the key for struct kbd_config
+   * */
   struct kbd_config *hdp = hid_desc_parse(data, out_size);
   if (hdp == NULL) {
     printf("Failed to parse the data \n");
     goto cleanup;
   }
 
+  goto cleanup;
+
 cleanup:
-  free(km);
+  char **pp = dev_list;
+  while (*pp != NULL)
+    free(*pp++);
   free(dev_list);
-  free(hdp);
   free(data);
+  free(km);
+  free(hdp);
 
   return 0;
 }

@@ -139,6 +139,7 @@ struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len) {
           if (full_usage == HID_GD_KEYBOARD) {
             in_keyboard = 1;
           }
+          usage = 0;
           break;
         }
       case HID_MAIN_ITEM_TAG_INPUT:
@@ -176,49 +177,67 @@ struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len) {
   return NULL;
 }
 
-struct kbd_map *parse_hid_uevent(char **dev_list) {
+struct kbd_map *hid_uevent_parse(char **dev_list) {
   char **head = dev_list;
   size_t uevent_len;
+
   while (*head != NULL) {
+    char *uevent_path = NULL;
+    unsigned char *uevent_data = NULL;
+    struct kbd_map *km = NULL;
+
     size_t path_size = strlen(*head) + strlen("/uevent") + 1;
 
-    char *uevent_path;
     uevent_path = malloc(path_size);
+    if (uevent_path == NULL)
+      goto cleanup;
 
     snprintf(uevent_path, path_size, "%s%s", *head, "/uevent");
 
     printf("uevent_path: %s \n", uevent_path);
-    unsigned char *uevent_data =
-        read_hid_file(uevent_path, &uevent_len, "r", &uevent_output);
+
+    uevent_data = read_hid_file(uevent_path, &uevent_len, "r", &uevent_output);
+
+    if (uevent_data == NULL)
+      goto cleanup;
+
     char *token = strtok(uevent_data, "\n");
 
     while (token != NULL) {
       if (strncmp(token, "HID_ID=", 7) == 0) {
         printf(" %s\n", token);
         char *str_tok = token;
-        int ret;
-        struct kbd_map *km = malloc(sizeof(struct kbd_map));
         unsigned int bus, vendor, product;
-        ret = sscanf(str_tok + 7, "%x:%x:%x", &bus, &vendor, &product);
+        int ret = sscanf(token + 7, "%x:%x:%x", &bus, &vendor, &product);
 
         if (ret != 3)
-          continue;
+          goto cleanup;
 
-        km->bus = bus;
+        km = malloc(sizeof(struct kbd_map));
+
+        if (km == NULL)
+          goto cleanup;
+
+        km->bus = (uint16_t)bus;
         km->vendor = vendor;
         km->product = product;
 
         printf("Bus: %x \n", km->bus);
         printf("vendor: %x \n", km->vendor);
         printf("product: %x \n", km->product);
+
         // TODO: need to add report desc check for keyboard
         free(uevent_data);
+        free(uevent_path);
         return km;
       }
       token = strtok(NULL, "\n");
     }
+
+  cleanup:
     free(uevent_path);
     free(uevent_data);
+    free(km);
     head++;
   }
   return NULL;

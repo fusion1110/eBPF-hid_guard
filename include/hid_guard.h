@@ -11,11 +11,11 @@ struct hid_output {
 extern struct hid_output report_descriptor_output;
 extern struct hid_output uevent_output;
 
+char **get_hid_devices(void);
 unsigned char *read_hid_file(char *path, size_t *out_size,
                              const char *file_mode, struct hid_output *ops);
-char **get_hid_devices(void);
 
-struct kbd_map *parse_hid_uevent(char **dev_list);
+struct kbd_map *hid_uevent_parse(char **dev_list);
 struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len);
 
 #endif
