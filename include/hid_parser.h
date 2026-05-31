@@ -1,5 +1,5 @@
-#ifndef _HID_PARSER_H
-#define _HID_PARSER_H
+#ifndef HID_PARSER_H
+#define HID_PARSER_H
 
 #include <stdint.h>
 

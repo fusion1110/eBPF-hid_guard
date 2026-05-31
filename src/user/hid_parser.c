@@ -6,11 +6,11 @@
 
 #define BIT(nr) (1 << (nr))
 
-uint16_t get_unaligned_le16(const uint8_t *buf) {
+static uint16_t get_unaligned_le16(const uint8_t *buf) {
   return buf[0] | (buf[1] << 8);
 }
 
-uint32_t get_unaligned_le32(const uint8_t *buf) {
+static uint32_t get_unaligned_le32(const uint8_t *buf) {
   return buf[0] | (buf[1] << 8) | (buf[2] << 16) | ((uint32_t)buf[3] << 24);
 }
 
@@ -145,9 +145,14 @@ struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len) {
       case HID_MAIN_ITEM_TAG_INPUT:
         if (in_keyboard) {
           bit_offset += report_size * report_count;
-          /*second item ie, the keycode array*/
+          /*Assuming second item ie, the keycode array
+           * better and more dynamic fix required*/
           if (input_count == 1) {
             struct kbd_config *kc = malloc(sizeof(struct kbd_config));
+
+                if(kc == NULL){
+                  return NULL;
+                }
             /*USB HID Class Specification 1.11
              * "If a device has multiple reports, each report is preceded by a
              * single byte report ID field. The report ID is not described in
@@ -169,6 +174,7 @@ struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len) {
         bit_offset = 0;
         input_count = 0;
         usage = 0;
+        usage_page = 0;
         break;
       }
     }
@@ -177,6 +183,8 @@ struct kbd_config *hid_desc_parse(const uint8_t *buf, size_t len) {
   return NULL;
 }
 
+/*The info it provides can be extracted from the dev_path itself,
+ * rethink how to modify it or even keep it at all*/
 struct kbd_map *hid_uevent_parse(char **dev_list) {
   char **head = dev_list;
   size_t uevent_len;

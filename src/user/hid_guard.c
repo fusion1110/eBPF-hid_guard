@@ -50,6 +50,10 @@ char **get_hid_devices(void) {
   folder = opendir(_PATH);
 
   if (folder == NULL) {
+    char **pp = dev_list;
+    while (*pp != NULL)
+      free(*pp++);
+    free(dev_list);
     perror("Unable to read directory");
     return (NULL);
   }
@@ -70,7 +74,6 @@ char **get_hid_devices(void) {
     char **temp = realloc(dev_list, (number_of_devices + 2) * sizeof(char *));
     if (temp == NULL) {
       free(dev_path);
-      free(temp);
       return NULL;
     }
     dev_list = temp;
@@ -84,7 +87,7 @@ char **get_hid_devices(void) {
   return (char **)dev_list;
 }
 
-unsigned char *report_descriptor_raw(char *path, size_t *out_size) {
+unsigned char *report_descriptor_raw(const char *path, size_t *out_size) {
   size_t path_size =
       strlen(path) + strlen("/report_descriptor") + 1; // +1 for null sentinal
 
@@ -101,8 +104,10 @@ unsigned char *report_descriptor_raw(char *path, size_t *out_size) {
   return report_buffer;
 }
 
-unsigned char *read_hid_file(char *path, size_t *out_size,
+unsigned char *read_hid_file(const char *path, size_t *out_size,
                              const char *file_mode, struct hid_output *ops) {
+  /*TODO: Though may descriptors are smaller than 1024 bytes,
+   * a better way would be to dynamically grow the buffer*/
   unsigned char *data = malloc(1024);
   if (data == NULL)
     return NULL;
@@ -111,6 +116,7 @@ unsigned char *read_hid_file(char *path, size_t *out_size,
   fptr = fopen(path, file_mode);
 
   if (fptr == NULL) {
+    free(data);
     perror("Error opening file");
     return NULL;
   }
@@ -136,10 +142,7 @@ int main() {
     goto cleanup;
   }
 
-  /*TODO: link the hid_desc_parse and hid_uevent_parse
-   *desired OUTPUT: on detecting a keyboard in hid_desc_parse 
-    the uevent parses the hid_id which is the key for struct kbd_config
-   * */
+  /*TODO: link the hid_desc_parse and hid_uevent_parse*/
   struct kbd_config *hdp = hid_desc_parse(data, out_size);
   if (hdp == NULL) {
     printf("Failed to parse the data \n");
